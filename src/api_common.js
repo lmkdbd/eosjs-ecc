@@ -4,6 +4,7 @@ const PublicKey = require("./key_public")
 const Signature = require("./signature")
 const key_utils = require("./key_utils")
 const hash = require("./hash")
+const curveInfo = require('./curve_info');
 
 /**
     [Wallet Import Format](https://en.bitcoin.it/wiki/Wallet_import_format)
@@ -31,8 +32,11 @@ const ecc = {
       Does not pause to gather CPU entropy.
       @return {Promise<PrivateKey>} test key
     */
-    unsafeRandomKey: () => (
-      PrivateKey.unsafeRandomKey().then(key => key.toString())
+    unsafeRandomKey: (curve_name, format) => (
+      PrivateKey.unsafeRandomKey().then(key => {
+        key.changeCurveName(curve_name)
+        return key.toString(format)
+      })
     ),
 
     /**
@@ -48,8 +52,11 @@ ecc.randomKey().then(privateKey => {
   console.log('Public Key:\t', ecc.privateToPublic(privateKey)) // EOSkey...
 })
     */
-    randomKey: (cpuEntropyBits) => (
-      PrivateKey.randomKey(cpuEntropyBits).then(key => key.toString())
+    randomKey: (cpuEntropyBits, curve_name, format) => (
+      PrivateKey.randomKey(cpuEntropyBits).then(key => {
+        key.changeCurveName(curve_name)
+        return key.toString(format)
+      })
     ),
 
     /**
@@ -61,7 +68,11 @@ ecc.randomKey().then(privateKey => {
 
         @example ecc.seedPrivate('secret') === wif
     */
-    seedPrivate: seed => PrivateKey.fromSeed(seed).toString(),
+    seedPrivate: (seed, curve_name, format) => {
+      let pk = PrivateKey.fromSeed(seed)
+      pk.changeCurveName(curve_name)
+      return pk.toString(format)
+    },
 
     /**
         @arg {wif} wif
@@ -71,8 +82,8 @@ ecc.randomKey().then(privateKey => {
 
         @example ecc.privateToPublic(wif) === pubkey
     */
-    privateToPublic: (wif, pubkey_prefix = 'EOS') =>
-      PrivateKey(wif).toPublic().toString(pubkey_prefix),
+    privateToPublic: (wif, format, pubkey_prefix = 'EOS') =>
+      PrivateKey(wif).toPublic().toString(format, pubkey_prefix),
 
     /**
         @arg {pubkey} pubkey - like EOSKey..
@@ -82,8 +93,8 @@ ecc.randomKey().then(privateKey => {
 
         @example ecc.isValidPublic(pubkey) === true
     */
-    isValidPublic: (pubkey, pubkey_prefix = 'EOS') =>
-      PublicKey.isValid(pubkey, pubkey_prefix),
+    isValidPublic: (pubkey,  curve_name, pubkey_prefix = 'EOS') =>
+      PublicKey.isValid(pubkey, curve_name, pubkey_prefix),
 
     /**
         @arg {wif} wif
@@ -104,7 +115,7 @@ ecc.randomKey().then(privateKey => {
 
         @example ecc.sign('I am alive', wif)
     */
-    sign: (data, privateKey, encoding = 'utf8') => {
+    sign: (data, privateKey, curve_name, encoding = 'utf8') => {
         if(encoding === true) {
           throw new TypeError('API changed, use signHash(..) instead')
         } else {
@@ -112,7 +123,7 @@ ecc.randomKey().then(privateKey => {
             console.log('Warning: ecc.sign hashData parameter was removed');
           }
         }
-        return Signature.sign(data, privateKey, encoding).toString()
+        return Signature.sign(data, privateKey, curve_name, encoding).toString()
     },
 
     /**
@@ -122,8 +133,8 @@ ecc.randomKey().then(privateKey => {
 
         @return {string} string signature
     */
-    signHash: (dataSha256, privateKey, encoding = 'hex') => {
-      return Signature.signHash(dataSha256, privateKey, encoding).toString()
+    signHash: (dataSha256, privateKey, curve_name, encoding = 'hex') => {
+      return Signature.signHash(dataSha256, privateKey, curve_name, encoding).toString()
     },
 
     /**
@@ -137,7 +148,7 @@ ecc.randomKey().then(privateKey => {
 
         @example ecc.verify(signature, 'I am alive', pubkey) === true
     */
-    verify: (signature, data, pubkey, encoding = 'utf8') => {
+    verify: (signature, data, pubkey, curve_name, encoding = 'utf8') => {
         if(encoding === true) {
           throw new TypeError('API changed, use verifyHash(..) instead')
         } else {
@@ -145,12 +156,12 @@ ecc.randomKey().then(privateKey => {
             console.log('Warning: ecc.verify hashData parameter was removed');
           }
         }
-        signature = Signature.from(signature)
+        signature = Signature.from(signature, curve_name)
         return signature.verify(data, pubkey, encoding)
     },
 
-    verifyHash(signature, dataSha256, pubkey, encoding = 'hex') {
-      signature = Signature.from(signature)
+    verifyHash(signature, dataSha256, pubkey, curve_name, encoding = 'hex') {
+      signature = Signature.from(signature, curve_name)
       return signature.verifyHash(dataSha256, pubkey, encoding)
     },
 
@@ -165,7 +176,7 @@ ecc.randomKey().then(privateKey => {
 
         @example ecc.recover(signature, 'I am alive') === pubkey
     */
-    recover: (signature, data, encoding = 'utf8') => {
+    recover: (signature, data, curve_name, format, encoding = 'utf8') => {
         if(encoding === true) {
           throw new TypeError('API changed, use recoverHash(signature, data) instead')
         } else {
@@ -173,8 +184,8 @@ ecc.randomKey().then(privateKey => {
             console.log('Warning: ecc.recover hashData parameter was removed');
           }
         }
-        signature = Signature.from(signature)
-        return signature.recover(data, encoding).toString()
+        signature = Signature.from(signature, curve_name)
+        return signature.recover(data, encoding).toString(format)
     },
 
     /**
@@ -184,9 +195,9 @@ ecc.randomKey().then(privateKey => {
 
         @return {PublicKey}
     */
-    recoverHash: (signature, dataSha256, encoding = 'hex') => {
-        signature = Signature.from(signature)
-        return signature.recoverHash(dataSha256, encoding).toString()
+    recoverHash: (signature, dataSha256, curve_name, format, encoding = 'hex') => {
+        signature = Signature.from(signature, curve_name)
+        return signature.recoverHash(dataSha256, encoding).toString(format)
     },
 
     /** @arg {string|Buffer} data - always binary, you may need Buffer.from(data, 'hex')
@@ -196,7 +207,11 @@ ecc.randomKey().then(privateKey => {
         @example ecc.sha256('hashme') === '02208b..'
         @example ecc.sha256(Buffer.from('02208b', 'hex')) === '29a23..'
     */
-    sha256: (data, resultEncoding = 'hex') => hash.sha256(data, resultEncoding)
+    sha256: (data, resultEncoding = 'hex') => hash.sha256(data, resultEncoding),
+
+    sm3: (data, resultEncoding = 'hex') => hash.sm3(data, resultEncoding),
+
+    getCurveNameByType: (type) => curveInfo.getInfoByType(type).info.name
 }
 
 module.exports = ecc

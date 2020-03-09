@@ -62,81 +62,216 @@ function deterministicGenerateK(curve, hash, d, checkSig, nonce) {
 
 }
 
-function sign(curve, hash, d, nonce) {
-  
-  var e = BigInteger.fromBuffer(hash)
-  var n = curve.n
-  var G = curve.G
-  
-  var r, s
-  var k = deterministicGenerateK(curve, hash, d, function (k) {
-    // find canonically valid signature
-    var Q = G.multiply(k)
-    
-    if (curve.isInfinity(Q)) return false
-    
-    r = Q.affineX.mod(n)
-    if (r.signum() === 0) return false
-    
-    s = k.modInverse(n).multiply(e.add(d.multiply(r))).mod(n)
-    if (s.signum() === 0) return false
-    
-    return true
-  }, nonce)
+function sm2(curve_name){
+  var curve = require('ecurve').getCurveByName(curve_name);
+  function sign(hash, d, nonce) {
 
-  var N_OVER_TWO = n.shiftRight(1)
-
-  // enforce low S values, see bip62: 'low s values in signatures'
-  if (s.compareTo(N_OVER_TWO) > 0) {
-    s = n.subtract(s)
+    var e = BigInteger.fromBuffer(hash);
+    var n = curve.n;
+    var G = curve.G;
+  
+    var r, s;
+  
+    var k = deterministicGenerateK(curve, hash, d, function (k) {
+      var Q = G.multiply(k);
+  
+      if (curve.isInfinity(Q)) return false;
+  
+      r = e.add(Q.affineX).mod(n);
+  
+      if (r.signum() === 0 || r.add(k).compareTo(curve.n) === 0) return false;
+  
+      s = d.add(1).modInverse(n).multiply(k.subtract(r.multiply(d))).mod(n);
+  
+      if (s.signum() === 0) return false;
+  
+      return true;
+    }, nonce);
+  
+    return ECSignature(r, s);
+  }
+  
+  function verifyRaw(e, signature, Q) {
+    var n = curve.n;
+    var G = curve.G;
+  
+    var r = signature.r;
+    var s = signature.s;
+  
+    //r and s are both integers in the interval [1, n − 1]
+    if (r.signum() <= 0 || r.compareTo(n) >= 0) return false;
+    if (s.signum() <= 0 || s.compareTo(n) >= 0) return false;
+  
+    //t = (r + s) mod n
+    var t = r.add(s).mod(n);
+    // t != 0
+    if (t.signum() === 0) return false;
+    // P = sG + tQ
+    var R = G.multiplyTwo(s, Q, t);
+  
+    if (curve.isInfinity(R)) return false;
+    //r' = (e + x) mod n
+    var v = R.affineX.add(e);
+    //r = r' 
+    return v.equals(r);
   }
 
-  return ECSignature(r, s)
-}
-
-function verifyRaw(curve, e, signature, Q) {
-  var n = curve.n
-  var G = curve.G
-
-  var r = signature.r
-  var s = signature.s
-
-  // 1.4.1 Enforce r and s are both integers in the interval [1, n − 1]
-  if (r.signum() <= 0 || r.compareTo(n) >= 0) return false
-  if (s.signum() <= 0 || s.compareTo(n) >= 0) return false
-
-  // c = s^-1 mod n
-  var c = s.modInverse(n)
-
-  // 1.4.4 Compute u1 = es^−1 mod n
-  //               u2 = rs^−1 mod n
-  var u1 = e.multiply(c).mod(n)
-  var u2 = r.multiply(c).mod(n)
-
-  // 1.4.5 Compute R = (xR, yR) = u1G + u2Q
-  var R = G.multiplyTwo(u1, Q, u2)
-
-  // 1.4.5 (cont.) Enforce R is not at infinity
-  if (curve.isInfinity(R)) return false
-
-  // 1.4.6 Convert the field element R.x to an integer
-  var xR = R.affineX
-
-  // 1.4.7 Set v = xR mod n
-  var v = xR.mod(n)
+  function verify(hash, signature, Q) {
+    // 1.4.2 H = Hash(M), already done by the user
+    // 1.4.3 e = H
+    var e = BigInteger.fromBuffer(hash);
+    return verifyRaw(e, signature, Q);
+  }
   
-  // 1.4.8 If v = r, output "valid", and if v != r, output "invalid"
-  return v.equals(r)
+  /**
+    * Recover a public key from a signature.
+    */
+  function recoverPubKey(e, signature, i) {
+    assert.strictEqual(i & 3, i, 'Recovery param is more than two bits');
+  
+    var n = curve.n;
+    var G = curve.G;
+  
+    var r = signature.r;
+    var s = signature.s;
+  
+    assert(r.signum() > 0 && r.compareTo(n) < 0, 'Invalid r value');
+    assert(s.signum() > 0 && s.compareTo(n) < 0, 'Invalid s value');
+  
+    // A set LSB signifies that the y-coordinate is odd
+    var isYOdd = i & 1;
+  
+    // The more significant bit specifies whether we should use the
+    // first or second candidate key.
+    var isSecondKey = i >> 1;
+    // Let x = r - e mod n
+    var x = r.subtract(e).mod(n);
+    // x = r + n
+    x = isSecondKey ? r.add(n) : r;
+    var R = curve.pointFromX(isYOdd, x);
+  
+    //Check that nR is at infinity
+    var nR = R.multiply(n);
+    assert(curve.isInfinity(nR), 'nR is not a valid curve point');
+  
+    //Compute u1 = (s + r)^ -1
+    //        u2 = (s + r)^ -1 * s
+    var u1 = s.add(r).modInverse(n);
+    var u2 = u1.multiply(s);
+  
+    var Q = R.multiplyTwo(u1,G,u2);
+    curve.validate(Q);
+  
+    return Q;
+  }
+
+  function calcPubKeyRecoveryParam(e, signature, Q) {
+    for (var i = 0; i < 4; i++) {
+      var Qprime = recoverPubKey(e, signature, i)
+  
+      // 1.6.2 Verify Q
+      if (Qprime.equals(Q)) {
+        return i
+      }
+    }
+  
+    throw new Error('Unable to find valid recovery factor')
+  }
+
+  function sign_hash(data) {
+    return crypto.sm3(data);
+  }
+
+  return {
+    calcPubKeyRecoveryParam,
+    recoverPubKey,
+    sign,
+    verify,
+    verifyRaw,
+    sign_hash,
+  }
 }
 
-function verify(curve, hash, signature, Q) {
-  // 1.4.2 H = Hash(M), already done by the user
-  // 1.4.3 e = H
-  var e = BigInteger.fromBuffer(hash)
-  return verifyRaw(curve, e, signature, Q)
-}
+function ecdsa(curve_name){
 
-/**
+  var curve = require('ecurve').getCurveByName(curve_name);
+
+  function sign(hash, d, nonce) {
+
+    var e = BigInteger.fromBuffer(hash);
+    var n = curve.n;
+    var G = curve.G;
+  
+    var r, s;
+  
+    var k = deterministicGenerateK(curve, hash, d, function (k) {
+      // find canonically valid signature
+      var Q = G.multiply(k);
+  
+      if (curve.isInfinity(Q)) return false;
+  
+      r = Q.affineX.mod(n);
+      if (r.signum() === 0) return false;
+  
+      s = k.modInverse(n).multiply(e.add(d.multiply(r))).mod(n);
+      if (s.signum() === 0) return false;
+  
+      return true;
+    }, nonce);
+  
+    var N_OVER_TWO = n.shiftRight(1);
+  
+    // enforce low S values, see bip62: 'low s values in signatures'
+    if (s.compareTo(N_OVER_TWO) > 0) {
+      s = n.subtract(s);
+    }
+  
+    return ECSignature(r, s);
+  }
+  
+  function verifyRaw(e, signature, Q) {
+    var n = curve.n;
+    var G = curve.G;
+  
+    var r = signature.r;
+    var s = signature.s;
+  
+    // 1.4.1 Enforce r and s are both integers in the interval [1, n − 1]
+    if (r.signum() <= 0 || r.compareTo(n) >= 0) return false;
+    if (s.signum() <= 0 || s.compareTo(n) >= 0) return false;
+  
+    // c = s^-1 mod n
+    var c = s.modInverse(n);
+  
+    // 1.4.4 Compute u1 = es^−1 mod n
+    //               u2 = rs^−1 mod n
+    var u1 = e.multiply(c).mod(n);
+    var u2 = r.multiply(c).mod(n);
+  
+    // 1.4.5 Compute R = (xR, yR) = u1G + u2Q
+    var R = G.multiplyTwo(u1, Q, u2);
+  
+    // 1.4.5 (cont.) Enforce R is not at infinity
+    if (curve.isInfinity(R)) return false;
+  
+    // 1.4.6 Convert the field element R.x to an integer
+    var xR = R.affineX;
+  
+    // 1.4.7 Set v = xR mod n
+    var v = xR.mod(n);
+  
+    // 1.4.8 If v = r, output "valid", and if v != r, output "invalid"
+    return v.equals(r);
+  }
+
+  function verify(hash, signature, Q) {
+    // 1.4.2 H = Hash(M), already done by the user
+    // 1.4.3 e = H
+    var e = BigInteger.fromBuffer(hash);
+    return verifyRaw(e, signature, Q);
+  }
+
+  /**
   * Recover a public key from a signature.
   *
   * See SEC 1: Elliptic Curve Cryptography, section 4.1.6, "Public
@@ -144,75 +279,80 @@ function verify(curve, hash, signature, Q) {
   *
   * http://www.secg.org/download/aid-780/sec1-v2.pdf
   */
-function recoverPubKey(curve, e, signature, i) {
-  assert.strictEqual(i & 3, i, 'Recovery param is more than two bits')
+  function recoverPubKey(e, signature, i) {
+    assert.strictEqual(i & 3, i, 'Recovery param is more than two bits');
 
-  var n = curve.n
-  var G = curve.G
+    var n = curve.n;
+    var G = curve.G;
 
-  var r = signature.r
-  var s = signature.s
+    var r = signature.r;
+    var s = signature.s;
 
-  assert(r.signum() > 0 && r.compareTo(n) < 0, 'Invalid r value')
-  assert(s.signum() > 0 && s.compareTo(n) < 0, 'Invalid s value')
+    assert(r.signum() > 0 && r.compareTo(n) < 0, 'Invalid r value');
+    assert(s.signum() > 0 && s.compareTo(n) < 0, 'Invalid s value');
 
-  // A set LSB signifies that the y-coordinate is odd
-  var isYOdd = i & 1
+    // A set LSB signifies that the y-coordinate is odd
+    var isYOdd = i & 1;
 
-  // The more significant bit specifies whether we should use the
-  // first or second candidate key.
-  var isSecondKey = i >> 1
+    // The more significant bit specifies whether we should use the
+    // first or second candidate key.
+    var isSecondKey = i >> 1;
 
-  // 1.1 Let x = r + jn
-  var x = isSecondKey ? r.add(n) : r
-  var R = curve.pointFromX(isYOdd, x)
+    // 1.1 Let x = r + jn
+    var x = isSecondKey ? r.add(n) : r;
+    var R = curve.pointFromX(isYOdd, x);
 
-  // 1.4 Check that nR is at infinity
-  var nR = R.multiply(n)
-  assert(curve.isInfinity(nR), 'nR is not a valid curve point')
+    // 1.4 Check that nR is at infinity
+    var nR = R.multiply(n);
+    assert(curve.isInfinity(nR), 'nR is not a valid curve point');
 
-  // Compute -e from e
-  var eNeg = e.negate().mod(n)
+    // Compute -e from e
+    var eNeg = e.negate().mod(n);
 
-  // 1.6.1 Compute Q = r^-1 (sR -  eG)
-  //               Q = r^-1 (sR + -eG)
-  var rInv = r.modInverse(n)
+    // 1.6.1 Compute Q = r^-1 (sR -  eG)
+    //               Q = r^-1 (sR + -eG)
+    var rInv = r.modInverse(n);
 
-  var Q = R.multiplyTwo(s, G, eNeg).multiply(rInv)
-  curve.validate(Q)
+    var Q = R.multiplyTwo(s, G, eNeg).multiply(rInv);
+    curve.validate(Q);
 
-  return Q
-}
-
-/**
-  * Calculate pubkey extraction parameter.
-  *
-  * When extracting a pubkey from a signature, we have to
-  * distinguish four different cases. Rather than putting this
-  * burden on the verifier, Bitcoin includes a 2-bit value with the
-  * signature.
-  *
-  * This function simply tries all four cases and returns the value
-  * that resulted in a successful pubkey recovery.
-  */
-function calcPubKeyRecoveryParam(curve, e, signature, Q) {
-  for (var i = 0; i < 4; i++) {
-    var Qprime = recoverPubKey(curve, e, signature, i)
-
-    // 1.6.2 Verify Q
-    if (Qprime.equals(Q)) {
-      return i
-    }
+    return Q;
   }
 
-  throw new Error('Unable to find valid recovery factor')
+  function calcPubKeyRecoveryParam(e, signature, Q) {
+    for (var i = 0; i < 4; i++) {
+      var Qprime = recoverPubKey(e, signature, i)
+  
+      // 1.6.2 Verify Q
+      if (Qprime.equals(Q)) {
+        return i
+      }
+    }
+  
+    throw new Error('Unable to find valid recovery factor')
+  }
+
+  function sign_hash(data) {
+    return crypto.sha256(data);
+  }
+
+  return {
+    calcPubKeyRecoveryParam,
+    recoverPubKey,
+    sign,
+    verify,
+    verifyRaw,
+    sign_hash,
+  }
+}
+
+function getSignInfo(curve_name) {
+  if (curve_name === "sm2")
+    return sm2(curve_name)
+  else return ecdsa(curve_name);
 }
 
 module.exports = {
-  calcPubKeyRecoveryParam: calcPubKeyRecoveryParam,
   deterministicGenerateK: deterministicGenerateK,
-  recoverPubKey: recoverPubKey,
-  sign: sign,
-  verify: verify,
-  verifyRaw: verifyRaw
+  getSignInfo: getSignInfo,
 }

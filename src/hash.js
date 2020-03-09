@@ -1,5 +1,6 @@
 const createHash = require('create-hash')
 const createHmac = require('create-hmac')
+var sm3Hash = require('sm3.js/lib/hash/sm3');
 
 /** @namespace hash */
 
@@ -48,13 +49,22 @@ function ripemd160(data) {
 //   return crypto.createHmac('sha512', secret).update(buffer).digest()
 // }
 
+/** @arg {string|Buffer} data
+    @arg {string} [resultEncoding = null] - 'hex', 'binary' or 'base64'
+    @return {string|Buffer} - Buffer when resultEncoding is null, or string
+*/
+function sm3(data, resultEncoding) {
+    return sm3Hash().update(data).digest(resultEncoding);
+}
+
 module.exports = {
     sha1: sha1,
     sha256: sha256,
     sha512: sha512,
     HmacSHA256: HmacSHA256,
-    ripemd160: ripemd160
+    ripemd160: ripemd160,
     // hash160: hash160,
     // hash256: hash256,
     // HmacSHA512: HmacSHA512
+    sm3: sm3
 }

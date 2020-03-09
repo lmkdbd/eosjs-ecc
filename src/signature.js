@@ -1,15 +1,16 @@
-const ecdsa = require('./ecdsa');
+const sigInfos = require('./ecdsa');
 const hash = require('./hash');
-const curve = require('ecurve').getCurveByName('secp256k1');
 const assert = require('assert');
 const BigInteger = require('bigi');
 const keyUtils = require('./key_utils');
 const PublicKey = require('./key_public');
 const PrivateKey = require('./key_private');
+const curveInfo = require('./curve_info');
 
 module.exports = Signature
 
-function Signature(r, s, i) {
+function Signature(r, s, i, curve_name) {
+    const sigInfo = sigInfos.getSignInfo(curve_name);
     assert.equal(r != null, true, 'Missing parameter');
     assert.equal(s != null, true, 'Missing parameter');
     assert.equal(i != null, true, 'Missing parameter');
@@ -28,7 +29,7 @@ function Signature(r, s, i) {
             data = Buffer.from(data, encoding)
         }
         assert(Buffer.isBuffer(data), 'data is a required String or Buffer')
-        data = hash.sha256(data)
+        data = sigInfo.sign_hash(data)
         return verifyHash(data, pubkey)
     }
 
@@ -48,11 +49,10 @@ function Signature(r, s, i) {
         if(dataSha256.length !== 32 || !Buffer.isBuffer(dataSha256))
             throw new Error("dataSha256: 32 bytes required")
 
-        const publicKey = PublicKey(pubkey)
+        const publicKey = PublicKey(pubkey, curve_name)
         assert(publicKey, 'pubkey required')
 
-        return ecdsa.verify(
-            curve, dataSha256,
+        return sigInfo.verify(dataSha256,
             { r: r, s: s },
             publicKey.Q
         );
@@ -84,7 +84,7 @@ function Signature(r, s, i) {
             data = Buffer.from(data, encoding)
         }
         assert(Buffer.isBuffer(data), 'data is a required String or Buffer')
-        data = hash.sha256(data)
+        data = sigInfo.sign_hash(data)
 
         return recoverHash(data)
     };
@@ -107,8 +107,8 @@ function Signature(r, s, i) {
         let i2 = i
         i2 -= 27;
         i2 = i2 & 3;
-        const Q = ecdsa.recoverPubKey(curve, e, {r, s, i}, i2);
-        return PublicKey.fromPoint(Q);
+        const Q = sigInfo.recoverPubKey(e, {r, s, i}, i2);
+        return PublicKey.fromPoint(Q, curve_name);
     };
 
     function toBuffer() {
@@ -130,7 +130,8 @@ function Signature(r, s, i) {
       if(signatureCache) {
           return signatureCache
       }
-      signatureCache = 'SIG_K1_' + keyUtils.checkEncode(toBuffer(), 'K1')
+      var curve_info = curveInfo.getInfoByName(curve_name)
+      signatureCache = 'SIG_'+ curve_info.info.keyType + '_' + keyUtils.checkEncode(toBuffer(), 'K1')
       return signatureCache
     }
 
@@ -174,13 +175,14 @@ function Signature(r, s, i) {
 
     @return {Signature}
 */
-Signature.sign = function(data, privateKey, encoding = 'utf8') {
+Signature.sign = function(data, privateKey, curve_name, encoding = 'utf8') {
+    const sigInfo = sigInfos.getSignInfo(curve_name);
     if(typeof data === 'string') {
         data = Buffer.from(data, encoding)
     }
     assert(Buffer.isBuffer(data), 'data is a required String or Buffer')
-    data = hash.sha256(data)
-    return Signature.signHash(data, privateKey)
+    data = sigInfo.sign_hash(data)
+    return Signature.signHash(data, privateKey, curve_name)
 }
 
 /**
@@ -192,7 +194,7 @@ Signature.sign = function(data, privateKey, encoding = 'utf8') {
 
     @return {Signature}
 */
-Signature.signHash = function(dataSha256, privateKey, encoding = 'hex') {
+Signature.signHash = function(dataSha256, privateKey, curve_name, encoding = 'hex') {
     if(typeof dataSha256 === 'string') {
         dataSha256 = Buffer.from(dataSha256, encoding)
     }
@@ -206,13 +208,14 @@ Signature.signHash = function(dataSha256, privateKey, encoding = 'hex') {
     i = null;
     nonce = 0;
     e = BigInteger.fromBuffer(dataSha256);
+    const sigInfo = sigInfos.getSignInfo(curve_name);
     while (true) {
-      ecsignature = ecdsa.sign(curve, dataSha256, privateKey.d, nonce++);
+      ecsignature = sigInfo.sign(dataSha256, privateKey.d, nonce++);
       der = ecsignature.toDER();
       lenR = der[3];
       lenS = der[5 + lenR];
       if (lenR === 32 && lenS === 32) {
-        i = ecdsa.calcPubKeyRecoveryParam(curve, e, ecsignature, privateKey.toPublic().Q);
+        i = sigInfo.calcPubKeyRecoveryParam(e, ecsignature, privateKey.toPublic(curve_name).Q);
         i += 4;  // compressed
         i += 27; // compact  //  24 or 27 :( forcing odd-y 2nd key candidate)
         break;
@@ -221,10 +224,10 @@ Signature.signHash = function(dataSha256, privateKey, encoding = 'hex') {
         console.log("WARN: " + nonce + " attempts to find canonical signature");
       }
     }
-    return Signature(ecsignature.r, ecsignature.s, i);
+    return Signature(ecsignature.r, ecsignature.s, i, curve_name);
 };
 
-Signature.fromBuffer = function(buf) {
+Signature.fromBuffer = function(buf, curve_name) {
     var i, r, s;
     assert(Buffer.isBuffer(buf), 'Buffer is required')
     assert.equal(buf.length, 65, 'Invalid signature length');
@@ -232,11 +235,11 @@ Signature.fromBuffer = function(buf) {
     assert.equal(i - 27, i - 27 & 7, 'Invalid signature parameter');
     r = BigInteger.fromBuffer(buf.slice(1, 33));
     s = BigInteger.fromBuffer(buf.slice(33));
-    return Signature(r, s, i);
+    return Signature(r, s, i, curve_name);
 };
 
-Signature.fromHex = function(hex) {
-    return Signature.fromBuffer(Buffer.from(hex, "hex"));
+Signature.fromHex = function(hex, curve_name) {
+    return Signature.fromBuffer(Buffer.from(hex, "hex"), curve_name);
 };
 
 /**
@@ -261,20 +264,20 @@ Signature.fromStringOrThrow = function(signature) {
     const match = signature.match(/^SIG_([A-Za-z0-9]+)_([A-Za-z0-9]+)$/)
     assert(match != null && match.length === 3, 'Expecting signature like: SIG_K1_base58signature..')
     const [, keyType, keyString] = match
-    assert.equal(keyType, 'K1', 'K1 signature expected')
-    return Signature.fromBuffer(keyUtils.checkDecode(keyString, keyType))
+    var curve_name = curveInfo.getInfoByType(keyType).info.name
+    return Signature.fromBuffer(keyUtils.checkDecode(keyString, keyType), curve_name)
 }
 
 /**
     @arg {String|Signature} o - hex string
     @return {Signature}
 */
-Signature.from = (o) => {
+Signature.from = (o, curve_name) => {
     const signature = o ?
         (o.r && o.s && o.i) ? o :
-        typeof o === 'string' && o.length === 130 ? Signature.fromHex(o) :
+        typeof o === 'string' && o.length === 130 ? Signature.fromHex(o, curve_name) :
         typeof o === 'string' && o.length !== 130 ? Signature.fromStringOrThrow(o) :
-        Buffer.isBuffer(o) ? Signature.fromBuffer(o) :
+        Buffer.isBuffer(o) ? Signature.fromBuffer(o, curve_name) :
         null : o/*null or undefined*/
 
     if(!signature) {

@@ -1,0 +1,14 @@
+{
+"secp256k1": {
+    "name": "secp256k1",
+    "keyType": "K1",
+    "prefix": ["EOS"],
+    "support_formats":["WIF","KTP"]
+},
+"sm2":{
+    "name": "sm2",
+    "keyType": "SM2",
+    "prefix": ["SM2"],
+    "support_formats":["KTP"]
+}
+}

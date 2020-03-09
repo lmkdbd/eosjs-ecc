@@ -15,7 +15,7 @@
     "coverage": "nyc --reporter=html npm test",
     "coveralls": "npm run coverage && cat ./coverage/lcov.info | ./node_modules/.bin/coveralls",
     "build": "npm run build_lib && npm run build_browser",
-    "build_lib": "rm -f lib/* && babel src --out-dir lib",
+    "build_lib": "rm -f lib/* && cp src/*.json lib && babel src --out-dir lib",
     "build_browser": "mkdir -p lib && browserify -o lib/eosjs-ecc.js -s eosjs_ecc lib/index.js",
     "build_browser_test": "npm run build && browserify -o dist/test.js lib/*.test.js",
     "documentation": "node_modules/documentation/bin/documentation.js",

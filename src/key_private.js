@@ -1,6 +1,5 @@
 const ecurve = require('ecurve');
 const Point = ecurve.Point;
-const secp256k1 = ecurve.getCurveByName('secp256k1');
 const BigInteger = require('bigi');
 const assert = require('assert');
 
@@ -9,9 +8,7 @@ const PublicKey = require('./key_public');
 const keyUtils = require('./key_utils');
 const createHash = require('create-hash')
 const promiseAsync = require('./promise-async')
-
-const G = secp256k1.G
-const n = secp256k1.n
+const curveInfo = require('./curve_info');
 
 module.exports = PrivateKey;
 
@@ -24,13 +21,13 @@ module.exports = PrivateKey;
 /**
   @param {BigInteger} d
 */
-function PrivateKey(d) {
+function PrivateKey(d, curve_name = "secp256k1") {
     if(typeof d === 'string') {
         return PrivateKey.fromString(d)
     } else if(Buffer.isBuffer(d)) {
-        return PrivateKey.fromBuffer(d)
+        return PrivateKey.fromBuffer(d, curve_name)
     } else if(typeof d === 'object' && BigInteger.isBigInteger(d.d)) {
-        return PrivateKey(d.d)
+        return PrivateKey(d.d, curve_name)
     }
 
     if(!BigInteger.isBigInteger(d)) {
@@ -38,10 +35,14 @@ function PrivateKey(d) {
     }
 
     /** @return {string} private key like PVT_K1_base58privatekey.. */
-    function toString() {
-      // todo, use PVT_K1_
-      // return 'PVT_K1_' + keyUtils.checkEncode(toBuffer(), 'K1')
-      return toWif()
+    function toString(format = "WIF") {
+      var curve_info = curveInfo.getInfoByName(curve_name);
+      assert(curve_info.isSupportedFormat(format), "Invalid private format type!")
+      if (format === "WIF")
+          return toWif()
+      else {
+          return `PVT_`+ curve_info.info.keyType +`_` + keyUtils.checkEncode(toBuffer(), curve_info.info.keyType)
+      }
     }
 
     /**
@@ -65,8 +66,9 @@ function PrivateKey(d) {
             // S L O W in the browser
             return public_key
         }
-        const Q = secp256k1.G.multiply(d);
-        return public_key = PublicKey.fromPoint(Q);
+        const curve = ecurve.getCurveByName(curve_name);
+        const Q = curve.G.multiply(d);
+        return public_key = PublicKey.fromPoint(Q, curve_name);
     }
 
     function toBuffer() {
@@ -78,11 +80,11 @@ function PrivateKey(d) {
       @arg {string|Object} pubkey wif, PublicKey object
       @return {Buffer} 64 byte shared secret
     */
-    function getSharedSecret(public_key) {
-        public_key = PublicKey(public_key)
+    function getSharedSecret(public_key, curve_name) {
+        public_key = PublicKey(public_key, curve_name)
         let KB = public_key.toUncompressed().toBuffer()
         let KBP = Point.fromAffine(
-          secp256k1,
+          curve_name,
           BigInteger.fromBuffer( KB.slice( 1,33 )), // x
           BigInteger.fromBuffer( KB.slice( 33,65 )) // y
         )
@@ -122,14 +124,20 @@ function PrivateKey(d) {
         return toBuffer().toString('hex');
     }
 
+    function changeCurveName(name = "secp256k1"){
+      curve_name = name
+    }
+
     return {
         d,
+        curve_name,
         toWif,
         toString,
         toPublic,
         toBuffer,
         getSharedSecret,
-        getChildKey
+        getChildKey,
+        changeCurveName,
     }
 }
 
@@ -143,16 +151,16 @@ function parseKey(privateStr) {
     const versionKey = keyUtils.checkDecode(privateStr, 'sha256x2')
     const version = versionKey.readUInt8(0);
     assert.equal(0x80, version, `Expected version ${0x80}, instead got ${version}`)
-    const privateKey = PrivateKey.fromBuffer(versionKey.slice(1))
     const keyType = 'K1'
     const format = 'WIF'
+    const privateKey = PrivateKey.fromBuffer(versionKey.slice(1))
     return {privateKey, format, keyType}
   }
 
   assert(match.length === 3, 'Expecting private key like: PVT_K1_base58privateKey..')
   const [, keyType, keyString] = match
-  assert.equal(keyType, 'K1', 'K1 private key expected')
-  const privateKey = PrivateKey.fromBuffer(keyUtils.checkDecode(keyString, keyType))
+  var curve_name = curveInfo.getInfoByType(keyType).info.name
+  const privateKey = PrivateKey.fromBuffer(keyUtils.checkDecode(keyString, keyType), curve_name)
   return {privateKey, format: 'PVT', keyType}
 }
 
@@ -160,7 +168,7 @@ PrivateKey.fromHex = function(hex) {
     return PrivateKey.fromBuffer(new Buffer(hex, 'hex'));
 }
 
-PrivateKey.fromBuffer = function(buf) {
+PrivateKey.fromBuffer = function(buf, curve_name = "secp256k1") {
     if (!Buffer.isBuffer(buf)) {
         throw new Error("Expecting parameter to be a Buffer type");
     }
@@ -171,7 +179,7 @@ PrivateKey.fromBuffer = function(buf) {
     if (32 !== buf.length) {
       throw new Error(`Expecting 32 bytes, instead got ${buf.length}`);
     }
-    return PrivateKey(BigInteger.fromBuffer(buf));
+    return PrivateKey(BigInteger.fromBuffer(buf), curve_name);
 }
 
 /**
@@ -283,22 +291,23 @@ PrivateKey.initialize = promiseAsync(initialize)
   @throws {AssertError}
 */
 function unitTest() {
+  let curve_name = 'secp256k1'
   const pvt = PrivateKey(hash.sha256(''))
 
   const pvtError = 'key comparison test failed on a known private key'
   assert.equal(pvt.toWif(), '5KYZdUEo39z3FPrtuX2QbbwGnNP5zTd7yyr2SC1j299sBCnWjss', pvtError)
-  assert.equal(pvt.toString(), '5KYZdUEo39z3FPrtuX2QbbwGnNP5zTd7yyr2SC1j299sBCnWjss', pvtError)
+  assert.equal(pvt.toString('WIF'), '5KYZdUEo39z3FPrtuX2QbbwGnNP5zTd7yyr2SC1j299sBCnWjss', pvtError)
   // assert.equal(pvt.toString(), 'PVT_K1_2jH3nnhxhR3zPUcsKaWWZC9ZmZAnKm3GAnFD1xynGJE1Znuvjd', pvtError)
 
-  const pub = pvt.toPublic()
+  const pub = pvt.toPublic(curve_name)
   const pubError = 'pubkey string comparison test failed on a known public key'
-  assert.equal(pub.toString(), 'EOS859gxfnXyUriMgUeThh1fWv3oqcpLFyHa3TfFYC4PK2HqhToVM', pubError)
+  assert.equal(pub.toString('WIF'), 'EOS859gxfnXyUriMgUeThh1fWv3oqcpLFyHa3TfFYC4PK2HqhToVM', pubError)
   // assert.equal(pub.toString(), 'PUB_K1_859gxfnXyUriMgUeThh1fWv3oqcpLFyHa3TfFYC4PK2Ht7beeX', pubError)
   // assert.equal(pub.toStringLegacy(), 'EOS859gxfnXyUriMgUeThh1fWv3oqcpLFyHa3TfFYC4PK2HqhToVM', pubError)
 
   doesNotThrow(() => PrivateKey.fromString(pvt.toWif()), 'converting known wif from string')
-  doesNotThrow(() => PrivateKey.fromString(pvt.toString()), 'converting known pvt from string')
-  doesNotThrow(() => PublicKey.fromString(pub.toString()), 'converting known public key from string')
+  doesNotThrow(() => PrivateKey.fromString(pvt.toString('WIF')), 'converting known pvt from string')
+  doesNotThrow(() => PublicKey.fromString(pub.toString('WIF')), 'converting known public key from string')
   // doesNotThrow(() => PublicKey.fromString(pub.toStringLegacy()), 'converting known public key from string')
 
   unitTested = true

@@ -8,7 +8,7 @@ const {PublicKey, PrivateKey, Signature} = ecc
 
 describe('Object API', () => {
   const pvt = PrivateKey('5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3')
-  const pub = pvt.toPublic()
+  const pub = pvt.toPublic('WIF')
 
   describe('secp256k1 keys', () => {
     it('randomKey', function() {
@@ -18,7 +18,7 @@ describe('Object API', () => {
 
     it('private to public', () => {
       assert.equal(
-        pub.toString(),
+        pub.toString('WIF'),
         // 'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
         'EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV',
         'pub.toString'
@@ -68,7 +68,7 @@ describe('Object API', () => {
   // })
 
   it('Signature', () => {
-    const sig = Signature.sign('data', pvt)
+    const sig = Signature.sign('data', pvt, "secp256k1")
     const sigString = sig.toString()
     assert.equal(sig.toString(), sigString, 'cache')
     assert.equal(Signature.fromString(sigString).toString(), sigString, 'fromString')
