@@ -63,7 +63,7 @@ function deterministicGenerateK(curve, hash, d, checkSig, nonce) {
 }
 
 function sm2(curve_name){
-  var curve = require('ecurve').getCurveByName(curve_name);
+  var curve = require('@lmkdbd/ecurve').getCurveByName(curve_name);
   function sign(hash, d, nonce) {
 
     var e = BigInteger.fromBuffer(hash);
@@ -194,7 +194,7 @@ function sm2(curve_name){
 
 function ecdsa(curve_name){
 
-  var curve = require('ecurve').getCurveByName(curve_name);
+  var curve = require('@lmkdbd/ecurve').getCurveByName(curve_name);
 
   function sign(hash, d, nonce) {
 

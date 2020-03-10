@@ -1,4 +1,4 @@
-const ecurve = require('ecurve');
+const ecurve = require('@lmkdbd/ecurve');
 const Point = ecurve.Point;
 const BigInteger = require('bigi');
 const assert = require('assert');

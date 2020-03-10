@@ -1,5 +1,5 @@
 const assert = require('assert');
-const ecurve = require('ecurve');
+const ecurve = require('@lmkdbd/ecurve');
 const BigInteger = require('bigi');
 const hash = require('./hash');
 const keyUtils = require('./key_utils');
