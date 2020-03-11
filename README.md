@@ -45,45 +45,52 @@ const ecc = require('eosjs-ecc')
 ### Table of Contents
 
 -   [wif](#wif)
+-   [pubkey](#pubkey)
 -   [ecc](#ecc)
     -   [initialize](#initialize)
     -   [unsafeRandomKey](#unsaferandomkey)
-    -   [randomKey](#randomkey)
         -   [Parameters](#parameters)
+    -   [randomKey](#randomkey)
+        -   [Parameters](#parameters-1)
         -   [Examples](#examples)
     -   [seedPrivate](#seedprivate)
-        -   [Parameters](#parameters-1)
+        -   [Parameters](#parameters-2)
         -   [Examples](#examples-1)
     -   [privateToPublic](#privatetopublic)
-        -   [Parameters](#parameters-2)
+        -   [Parameters](#parameters-3)
         -   [Examples](#examples-2)
     -   [isValidPublic](#isvalidpublic)
-        -   [Parameters](#parameters-3)
+        -   [Parameters](#parameters-4)
         -   [Examples](#examples-3)
     -   [isValidPrivate](#isvalidprivate)
-        -   [Parameters](#parameters-4)
+        -   [Parameters](#parameters-5)
         -   [Examples](#examples-4)
     -   [sign](#sign)
-        -   [Parameters](#parameters-5)
+        -   [Parameters](#parameters-6)
         -   [Examples](#examples-5)
     -   [signHash](#signhash)
-        -   [Parameters](#parameters-6)
-    -   [verify](#verify)
         -   [Parameters](#parameters-7)
+    -   [verify](#verify)
+        -   [Parameters](#parameters-8)
         -   [Examples](#examples-6)
     -   [recover](#recover)
-        -   [Parameters](#parameters-8)
+        -   [Parameters](#parameters-9)
         -   [Examples](#examples-7)
     -   [recoverHash](#recoverhash)
-        -   [Parameters](#parameters-9)
-    -   [sha256](#sha256)
         -   [Parameters](#parameters-10)
+    -   [sha256](#sha256)
+        -   [Parameters](#parameters-11)
         -   [Examples](#examples-8)
--   [pubkey](#pubkey)
 
 ## wif
 
 [Wallet Import Format](https://en.bitcoin.it/wiki/Wallet_import_format)
+
+Type: [string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)
+
+## pubkey
+
+EOSKey..
 
 Type: [string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)
 
@@ -97,11 +104,16 @@ generation.
 
 Initialization happens once even if called multiple times.
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)**
+Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** 
 
 ### unsafeRandomKey
 
 Does not pause to gather CPU entropy.
+
+#### Parameters
+
+-   `curve_name`  
+-   `format`  
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;PrivateKey>** test key
 
@@ -112,6 +124,8 @@ Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/
 -   `cpuEntropyBits` **[number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** gather additional entropy
     from a CPU mining algorithm.  This will already happen once by
     default. (optional, default `0`)
+-   `curve_name`  
+-   `format`  
 
 #### Examples
 
@@ -122,7 +136,7 @@ console.log('Public Key:\t', ecc.privateToPublic(privateKey)) // EOSkey...
 })
 ```
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[wif](#wif)>**
+Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[wif](#wif)>** 
 
 ### seedPrivate
 
@@ -131,6 +145,8 @@ Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/
 -   `seed` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** any length string.  This is private.  The same
     seed produces the same private key every time.  At least 128 random
     bits should be used to produce a good private key.
+-   `curve_name`  
+-   `format`  
 
 #### Examples
 
@@ -138,13 +154,14 @@ Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/
 ecc.seedPrivate('secret') === wif
 ```
 
-Returns **[wif](#wif)**
+Returns **[wif](#wif)** 
 
 ### privateToPublic
 
 #### Parameters
 
--   `wif` **[wif](#wif)**
+-   `wif` **[wif](#wif)** 
+-   `format`  
 -   `pubkey_prefix` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** public key prefix (optional, default `'EOS'`)
 
 #### Examples
@@ -153,13 +170,14 @@ Returns **[wif](#wif)**
 ecc.privateToPublic(wif) === pubkey
 ```
 
-Returns **[pubkey](#pubkey)**
+Returns **[pubkey](#pubkey)** 
 
 ### isValidPublic
 
 #### Parameters
 
 -   `pubkey` **[pubkey](#pubkey)** like EOSKey..
+-   `curve_name`  
 -   `pubkey_prefix` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)**  (optional, default `'EOS'`)
 
 #### Examples
@@ -174,7 +192,7 @@ Returns **[boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/
 
 #### Parameters
 
--   `wif` **[wif](#wif)**
+-   `wif` **[wif](#wif)** 
 
 #### Examples
 
@@ -190,8 +208,9 @@ Create a signature using data or a hash.
 
 #### Parameters
 
--   `data` **([string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))**
--   `privateKey` **([wif](#wif) | PrivateKey)**
+-   `data` **([string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** 
+-   `privateKey` **([wif](#wif) | PrivateKey)** 
+-   `curve_name`  
 -   `encoding` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** data encoding (if string) (optional, default `'utf8'`)
 
 #### Examples
@@ -207,7 +226,8 @@ Returns **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/G
 #### Parameters
 
 -   `dataSha256` **([String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** sha256 hash 32 byte buffer or string
--   `privateKey` **([wif](#wif) | PrivateKey)**
+-   `privateKey` **([wif](#wif) | PrivateKey)** 
+-   `curve_name`  
 -   `encoding` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** dataSha256 encoding (if string) (optional, default `'hex'`)
 
 Returns **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** string signature
@@ -219,8 +239,9 @@ Verify signed data.
 #### Parameters
 
 -   `signature` **([string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** buffer or hex string
--   `data` **([string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))**
--   `pubkey` **([pubkey](#pubkey) | PublicKey)**
+-   `data` **([string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** 
+-   `pubkey` **([pubkey](#pubkey) | PublicKey)** 
+-   `curve_name`  
 -   `encoding`   (optional, default `'utf8'`)
 -   `hashData` **[boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** sha256 hash data before verify (optional, default `true`)
 
@@ -230,7 +251,7 @@ Verify signed data.
 ecc.verify(signature, 'I am alive', pubkey) === true
 ```
 
-Returns **[boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)**
+Returns **[boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** 
 
 ### recover
 
@@ -240,6 +261,8 @@ Recover the public key used to create the signature.
 
 -   `signature` **([String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** (EOSbase58sig.., Hex, Buffer)
 -   `data` **([String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** full data
+-   `curve_name`  
+-   `format`  
 -   `encoding` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** data encoding (if data is a string) (optional, default `'utf8'`)
 
 #### Examples
@@ -248,7 +271,7 @@ Recover the public key used to create the signature.
 ecc.recover(signature, 'I am alive') === pubkey
 ```
 
-Returns **[pubkey](#pubkey)**
+Returns **[pubkey](#pubkey)** 
 
 ### recoverHash
 
@@ -256,9 +279,11 @@ Returns **[pubkey](#pubkey)**
 
 -   `signature` **([String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** (EOSbase58sig.., Hex, Buffer)
 -   `dataSha256` **([String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** sha256 hash 32 byte buffer or hex string
+-   `curve_name`  
+-   `format`  
 -   `encoding` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** dataSha256 encoding (if dataSha256 is a string) (optional, default `'hex'`)
 
-Returns **PublicKey**
+Returns **PublicKey** 
 
 ### sha256
 
@@ -279,12 +304,6 @@ ecc.sha256(Buffer.from('02208b', 'hex')) === '29a23..'
 ```
 
 Returns **([string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String) \| [Buffer](https://nodejs.org/api/buffer.html))** Buffer when encoding is null, or string
-
-## pubkey
-
-EOSKey..
-
-Type: [string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)
 
 # Usage (Object API)
 
