@@ -131,7 +131,7 @@ function Signature(r, s, i, curve_name) {
           return signatureCache
       }
       var curve_info = curveInfo.getInfoByName(curve_name)
-      signatureCache = 'SIG_'+ curve_info.info.keyType + '_' + keyUtils.checkEncode(toBuffer(), 'K1')
+      signatureCache = 'SIG_'+ curve_info.info.keyType + '_' + keyUtils.checkEncode(toBuffer(), curve_info.info.keyType)
       return signatureCache
     }
 

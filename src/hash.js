@@ -54,7 +54,10 @@ function ripemd160(data) {
     @return {string|Buffer} - Buffer when resultEncoding is null, or string
 */
 function sm3(data, resultEncoding) {
-    return sm3Hash().update(data).digest(resultEncoding);
+    var res = new Buffer.from(sm3Hash().update(data).digest());
+    if (resultEncoding === undefined )
+        return res;
+    return res.toString(resultEncoding);
 }
 
 module.exports = {

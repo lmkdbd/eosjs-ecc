@@ -80,8 +80,10 @@ function sm2(curve_name){
       r = e.add(Q.affineX).mod(n);
   
       if (r.signum() === 0 || r.add(k).compareTo(curve.n) === 0) return false;
-  
-      s = d.add(1).modInverse(n).multiply(k.subtract(r.multiply(d))).mod(n);
+      
+      const number_one = new BigInteger(1, 16)
+      
+      s = d.add(number_one).modInverse(n).multiply(k.subtract(r.multiply(d))).mod(n);
   
       if (s.signum() === 0) return false;
   
@@ -146,8 +148,8 @@ function sm2(curve_name){
     var isSecondKey = i >> 1;
     // Let x = r - e mod n
     var x = r.subtract(e).mod(n);
-    // x = r + n
-    x = isSecondKey ? r.add(n) : r;
+    // x = x + n
+    x = isSecondKey ? x.add(n) : x;
     var R = curve.pointFromX(isYOdd, x);
   
     //Check that nR is at infinity
@@ -156,8 +158,9 @@ function sm2(curve_name){
   
     //Compute u1 = (s + r)^ -1
     //        u2 = (s + r)^ -1 * s
+    var sNeg = s.negate().mod(n);
     var u1 = s.add(r).modInverse(n);
-    var u2 = u1.multiply(s);
+    var u2 = u1.multiply(sNeg);
   
     var Q = R.multiplyTwo(u1,G,u2);
     curve.validate(Q);
@@ -209,7 +212,6 @@ function ecdsa(curve_name){
       var Q = G.multiply(k);
   
       if (curve.isInfinity(Q)) return false;
-  
       r = Q.affineX.mod(n);
       if (r.signum() === 0) return false;
   
