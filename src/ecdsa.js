@@ -113,7 +113,7 @@ function sm2(curve_name){
   
     if (curve.isInfinity(R)) return false;
     //r' = (e + x) mod n
-    var v = R.affineX.add(e);
+    var v = R.affineX.add(e).mod(n);
     //r = r' 
     return v.equals(r);
   }

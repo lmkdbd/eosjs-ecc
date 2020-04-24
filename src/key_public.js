@@ -52,8 +52,9 @@ function PublicKey(Q, curve_name = "secp256k1", pubkey_prefix = 'EOS') {
     function toString(format = "WIF", pubkey_prefix = 'EOS') {
         var curve_info = curveInfo.getInfoByName(curve_name);
         assert(curve_info.isSupportedFormat(format), "Invalid public format type!")
-        if (format === "WIF")
+        if (format === "WIF"){
             return pubkey_prefix + keyUtils.checkEncode(toBuffer())
+        }
         else {
             return `PUB_`+ curve_info.info.keyType +`_` + keyUtils.checkEncode(toBuffer(), curve_info.info.keyType)
         }
